@@ -14,17 +14,29 @@ def home():
 @app.route("/webhook", methods=["POST"])
 def webhook():
     data = request.json
-    
-    if not data or "message" not in data:
+    if not data:
         return jsonify({"status": "ok"}), 200
 
-    message = data["message"]
+    # Проверяем обычное сообщение или бизнес-сообщение Telegram Business
+    message = None
+    business_connection_id = None
+
+    if "business_message" in data:
+        message = data["business_message"]
+        business_connection_id = message.get("business_connection_id")
+    elif "message" in data:
+        message = data["message"]
+
+    if not message:
+        return jsonify({"status": "ok"}), 200
+
     chat_id = message["chat"]["id"]
     user_text = message.get("text", "")
 
     if not user_text:
         return jsonify({"status": "ok"}), 200
 
+    # Запрос к OpenAI API
     headers = {
         "Authorization": f"Bearer {OPENAI_API_KEY}",
         "Content-Type": "application/json"
@@ -44,11 +56,17 @@ def webhook():
         res_data = response.json()
         ai_reply = res_data["choices"][0]["message"]["content"]
 
-        return jsonify({
+        # Формируем ответ для Telegram
+        reply_payload = {
             "method": "sendMessage",
             "chat_id": chat_id,
             "text": ai_reply
-        }), 200
+        }
+        
+        if business_connection_id:
+            reply_payload["business_connection_id"] = business_connection_id
+
+        return jsonify(reply_payload), 200
 
     except Exception as e:
         print("Error:", e)
