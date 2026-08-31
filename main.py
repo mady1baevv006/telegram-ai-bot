@@ -7,6 +7,7 @@ app = Flask(__name__)
 GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 SYSTEM_PROMPT = os.environ.get("SYSTEM_PROMPT")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+MODEL_NAME = os.environ.get("MODEL_NAME", "llama-3.3-70b-versatile")
 
 @app.route("/", methods=["GET"])
 def home():
@@ -18,7 +19,6 @@ def webhook():
     if not data:
         return jsonify({"status": "ok"}), 200
 
-    # Обработка сообщений Telegram Business
     message = None
     business_connection_id = None
 
@@ -31,7 +31,6 @@ def webhook():
     if not message:
         return jsonify({"status": "ok"}), 200
 
-    # Игнорируем сообщения от ботов
     if message.get("from", {}).get("is_bot", False):
         return jsonify({"status": "ok"}), 200
 
@@ -41,14 +40,13 @@ def webhook():
     if not user_text:
         return jsonify({"status": "ok"}), 200
 
-    # Бесплатный запрос к Groq API (стабильная модель llama-3.1-8b-instant)
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
     }
     
     payload = {
-        "model": "llama-3.2-3b-preview",
+        "model": MODEL_NAME,
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_text}
@@ -66,7 +64,6 @@ def webhook():
 
         ai_reply = res_data["choices"][0]["message"]["content"]
 
-        # Прямая отправка ответа в Telegram API
         tg_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         tg_payload = {
             "chat_id": chat_id,
