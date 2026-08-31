@@ -1,7 +1,6 @@
 import os
 import requests
 from flask import Flask, request, jsonify
-from google import genai
 
 app = Flask(__name__)
 
@@ -9,12 +8,9 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 SYSTEM_PROMPT = os.environ.get("SYSTEM_PROMPT")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
-# Инициализируем клиент Google Gemini
-client = genai.Client(api_key=GEMINI_API_KEY)
-
 @app.route("/", methods=["GET"])
 def home():
-    return "AI Bot Server with Gemini is Running!", 200
+    return "AI Bot Server is Running!", 200
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -43,20 +39,31 @@ def webhook():
     if not user_text:
         return jsonify({"status": "ok"}), 200
 
-    try:
-        # Запрос к Google Gemini 2.5 Flash с системным промптом
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=user_text,
-            config={
-                "system_instruction": SYSTEM_PROMPT,
-                "temperature": 0.7
+    # Прямой запрос к Google Gemini API
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    
+    payload = {
+        "system_instruction": {
+            "parts": [{"text": SYSTEM_PROMPT}]
+        },
+        "contents": [
+            {
+                "parts": [{"text": user_text}]
             }
-        )
+        ]
+    }
 
-        ai_reply = response.text
+    try:
+        response = requests.post(url, json=payload)
+        res_data = response.json()
 
-        # Отправка ответа в Telegram
+        if "error" in res_data:
+            print("Gemini Error Details:", res_data["error"])
+            return jsonify({"status": "error"}), 200
+
+        ai_reply = res_data["candidates"][0]["content"]["parts"][0]["text"]
+
+        # Отправка в Telegram
         tg_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         tg_payload = {
             "chat_id": chat_id,
@@ -71,7 +78,7 @@ def webhook():
         return jsonify({"status": "ok"}), 200
 
     except Exception as e:
-        print("Gemini Error:", e)
+        print("General Error:", e)
         return jsonify({"status": "error"}), 500
 
 if __name__ == "__main__":
