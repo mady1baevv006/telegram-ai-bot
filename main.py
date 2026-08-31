@@ -8,14 +8,6 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 SYSTEM_PROMPT = os.environ.get("SYSTEM_PROMPT")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
-# Список бесплатных моделей Groq по старшинству
-MODELS_TO_TRY = [
-    "llama-3.1-8b-instant",
-    "llama3-8b-8192",
-    "llama-3.3-70b-versatile",
-    "gemma2-9b-it"
-]
-
 @app.route("/", methods=["GET"])
 def home():
     return "AI Bot Server is Running!", 200
@@ -51,49 +43,42 @@ def webhook():
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
     }
-
-    ai_reply = None
-
-    # Перебираем модели, пока одна из них не ответит
-    for model in MODELS_TO_TRY:
-        payload = {
-            "model": model,
-            "messages": [
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": user_text}
-            ],
-            "temperature": 0.7
-        }
-
-        try:
-            response = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers)
-            res_data = response.json()
-
-            if "choices" in res_data and len(res_data["choices"]) > 0:
-                ai_reply = res_data["choices"][0]["message"]["content"]
-                break
-            else:
-                print(f"Model {model} failed, trying next... Error: {res_data.get('error')}")
-        except Exception as e:
-            print(f"Exception on model {model}: {e}")
-
-    if not ai_reply:
-        print("All models failed!")
-        return jsonify({"status": "error"}), 500
-
-    # Отправка ответа в Telegram
-    tg_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    tg_payload = {
-        "chat_id": chat_id,
-        "text": ai_reply
-    }
     
-    if business_connection_id:
-        tg_payload["business_connection_id"] = business_connection_id
+    payload = {
+        "model": "llama-3.1-8b-instant",
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_text}
+        ],
+        "temperature": 0.7
+    }
 
-    requests.post(tg_url, json=tg_payload)
+    try:
+        response = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers)
+        res_data = response.json()
 
-    return jsonify({"status": "ok"}), 200
+        if "error" in res_data:
+            print("Groq Error Details:", res_data["error"])
+            return jsonify({"status": "error"}), 200
+
+        ai_reply = res_data["choices"][0]["message"]["content"]
+
+        tg_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        tg_payload = {
+            "chat_id": chat_id,
+            "text": ai_reply
+        }
+        
+        if business_connection_id:
+            tg_payload["business_connection_id"] = business_connection_id
+
+        requests.post(tg_url, json=tg_payload)
+
+        return jsonify({"status": "ok"}), 200
+
+    except Exception as e:
+        print("General Error:", e)
+        return jsonify({"status": "error"}), 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
