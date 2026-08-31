@@ -48,7 +48,7 @@ def webhook():
     }
     
     payload = {
-        "model": "mixtral-8x7b-32768",
+        "model": "llama-3.2-3b-preview",
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_text}
