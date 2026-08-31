@@ -6,6 +6,7 @@ app = Flask(__name__)
 
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 SYSTEM_PROMPT = os.environ.get("SYSTEM_PROMPT")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
 @app.route("/", methods=["GET"])
 def home():
@@ -17,7 +18,7 @@ def webhook():
     if not data:
         return jsonify({"status": "ok"}), 200
 
-    # Проверяем обычное сообщение или бизнес-сообщение Telegram Business
+    # Обработка сообщений Telegram Business
     message = None
     business_connection_id = None
 
@@ -30,13 +31,17 @@ def webhook():
     if not message:
         return jsonify({"status": "ok"}), 200
 
+    # Проверка, чтобы бот не ответил на ваши собственные сообщения
+    if message.get("from", {}).get("is_bot", False):
+        return jsonify({"status": "ok"}), 200
+
     chat_id = message["chat"]["id"]
     user_text = message.get("text", "")
 
     if not user_text:
         return jsonify({"status": "ok"}), 200
 
-    # Запрос к OpenAI API
+    # Запрос к OpenAI
     headers = {
         "Authorization": f"Bearer {OPENAI_API_KEY}",
         "Content-Type": "application/json"
@@ -56,17 +61,19 @@ def webhook():
         res_data = response.json()
         ai_reply = res_data["choices"][0]["message"]["content"]
 
-        # Формируем ответ для Telegram
-        reply_payload = {
-            "method": "sendMessage",
+        # Прямой отправляющий запрос в Telegram API
+        tg_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+        tg_payload = {
             "chat_id": chat_id,
             "text": ai_reply
         }
         
         if business_connection_id:
-            reply_payload["business_connection_id"] = business_connection_id
+            tg_payload["business_connection_id"] = business_connection_id
 
-        return jsonify(reply_payload), 200
+        requests.post(tg_url, json=tg_payload)
+
+        return jsonify({"status": "ok"}), 200
 
     except Exception as e:
         print("Error:", e)
