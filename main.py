@@ -4,7 +4,7 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 SYSTEM_PROMPT = os.environ.get("SYSTEM_PROMPT")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
@@ -31,7 +31,7 @@ def webhook():
     if not message:
         return jsonify({"status": "ok"}), 200
 
-    # Проверка, чтобы бот не ответил на ваши собственные сообщения
+    # Проверка, чтобы бот не ответил сам себе
     if message.get("from", {}).get("is_bot", False):
         return jsonify({"status": "ok"}), 200
 
@@ -41,14 +41,14 @@ def webhook():
     if not user_text:
         return jsonify({"status": "ok"}), 200
 
-    # Запрос к OpenAI
+    # Бесплатный запрос к Groq API (модель llama-3.3-70b-versatile)
     headers = {
-        "Authorization": f"Bearer {OPENAI_API_KEY}",
+        "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
     }
     
     payload = {
-        "model": "gpt-4o-mini",
+        "model": "llama-3.3-70b-versatile",
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_text}
@@ -57,8 +57,13 @@ def webhook():
     }
 
     try:
-        response = requests.post("https://api.openai.com/v1/chat/completions", json=payload, headers=headers)
+        response = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers)
         res_data = response.json()
+
+        if "error" in res_data:
+            print("Groq Error Details:", res_data["error"])
+            return jsonify({"status": "error"}), 200
+
         ai_reply = res_data["choices"][0]["message"]["content"]
 
         # Прямой отправляющий запрос в Telegram API
@@ -76,7 +81,7 @@ def webhook():
         return jsonify({"status": "ok"}), 200
 
     except Exception as e:
-        print("Error:", e)
+        print("General Error:", e)
         return jsonify({"status": "error"}), 500
 
 if __name__ == "__main__":
