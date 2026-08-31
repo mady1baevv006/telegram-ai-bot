@@ -1,16 +1,20 @@
 import os
 import requests
 from flask import Flask, request, jsonify
+from google import genai
 
 app = Flask(__name__)
 
-GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
 SYSTEM_PROMPT = os.environ.get("SYSTEM_PROMPT")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 
+# Инициализируем клиент Google Gemini
+client = genai.Client(api_key=GEMINI_API_KEY)
+
 @app.route("/", methods=["GET"])
 def home():
-    return "AI Bot Server is Running!", 200
+    return "AI Bot Server with Gemini is Running!", 200
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -39,30 +43,20 @@ def webhook():
     if not user_text:
         return jsonify({"status": "ok"}), 200
 
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json"
-    }
-    
-    payload = {
-        "model": "llama-3.1-8b-instant",
-        "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
-            {"role": "user", "content": user_text}
-        ],
-        "temperature": 0.7
-    }
-
     try:
-        response = requests.post("https://api.groq.com/openai/v1/chat/completions", json=payload, headers=headers)
-        res_data = response.json()
+        # Запрос к Google Gemini 2.5 Flash с системным промптом
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=user_text,
+            config={
+                "system_instruction": SYSTEM_PROMPT,
+                "temperature": 0.7
+            }
+        )
 
-        if "error" in res_data:
-            print("Groq Error Details:", res_data["error"])
-            return jsonify({"status": "error"}), 200
+        ai_reply = response.text
 
-        ai_reply = res_data["choices"][0]["message"]["content"]
-
+        # Отправка ответа в Telegram
         tg_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         tg_payload = {
             "chat_id": chat_id,
@@ -77,7 +71,7 @@ def webhook():
         return jsonify({"status": "ok"}), 200
 
     except Exception as e:
-        print("General Error:", e)
+        print("Gemini Error:", e)
         return jsonify({"status": "error"}), 500
 
 if __name__ == "__main__":
