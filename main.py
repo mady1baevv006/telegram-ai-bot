@@ -31,7 +31,7 @@ def webhook():
     if not message:
         return jsonify({"status": "ok"}), 200
 
-    # Проверка, чтобы бот не ответил сам себе
+    # Игнорируем сообщения от ботов
     if message.get("from", {}).get("is_bot", False):
         return jsonify({"status": "ok"}), 200
 
@@ -41,14 +41,14 @@ def webhook():
     if not user_text:
         return jsonify({"status": "ok"}), 200
 
-    # Бесплатный запрос к Groq API (модель llama-3.3-70b-versatile)
+    # Бесплатный запрос к Groq API (стабильная модель llama-3.1-8b-instant)
     headers = {
         "Authorization": f"Bearer {GROQ_API_KEY}",
         "Content-Type": "application/json"
     }
     
     payload = {
-        "model": "llama-3.3-70b-versatile",
+        "model": "llama-3.1-8b-instant",
         "messages": [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": user_text}
@@ -66,7 +66,7 @@ def webhook():
 
         ai_reply = res_data["choices"][0]["message"]["content"]
 
-        # Прямой отправляющий запрос в Telegram API
+        # Прямая отправка ответа в Telegram API
         tg_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         tg_payload = {
             "chat_id": chat_id,
