@@ -9,6 +9,13 @@ SYSTEM_PROMPT = os.environ.get("SYSTEM_PROMPT")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 MODEL_NAME = os.environ.get("MODEL_NAME", "llama-3.3-70b-versatile")
 
+# Запоминаем, кому уже отправляли предупреждение "я ИИ-ассистент".
+# Хранится только в памяти сервера, поэтому после перезапуска сервиса
+# на Render (например, после обновления кода) список обнулится и
+# предупреждение придёт заново одному и тому же человеку один раз.
+greeted_chats = set()
+AI_DISCLAIMER = "Здравствуйте! Я ИИ-ассистент, помогаю отвечать на вопросы по курсам. 🙂\n\n"
+
 
 @app.route("/", methods=["GET"])
 def home():
@@ -67,6 +74,10 @@ def webhook():
             return jsonify({"status": "error"}), 200
 
         ai_reply = res_data["choices"][0]["message"]["content"]
+
+        if chat_id not in greeted_chats:
+            ai_reply = AI_DISCLAIMER + ai_reply
+            greeted_chats.add(chat_id)
 
         # Отправка ответа в Telegram
         tg_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
