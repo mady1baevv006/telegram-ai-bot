@@ -4,13 +4,16 @@ from flask import Flask, request, jsonify
 
 app = Flask(__name__)
 
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY")
+GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 SYSTEM_PROMPT = os.environ.get("SYSTEM_PROMPT")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
+MODEL_NAME = os.environ.get("MODEL_NAME", "llama-3.3-70b-versatile")
+
 
 @app.route("/", methods=["GET"])
 def home():
     return "AI Bot Server is Running!", 200
+
 
 @app.route("/webhook", methods=["POST"])
 def webhook():
@@ -39,47 +42,49 @@ def webhook():
     if not user_text:
         return jsonify({"status": "ok"}), 200
 
-    # Прямой запрос к Google Gemini API
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
-    
+    # Запрос к Groq (OpenAI-совместимый формат)
+    url = "https://api.groq.com/openai/v1/chat/completions"
+
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
     payload = {
-        "system_instruction": {
-            "parts": [{"text": SYSTEM_PROMPT}]
-        },
-        "contents": [
-            {
-                "parts": [{"text": user_text}]
-            }
-        ]
+        "model": MODEL_NAME,
+        "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_text},
+        ],
     }
 
     try:
-        response = requests.post(url, json=payload)
+        response = requests.post(url, headers=headers, json=payload)
         res_data = response.json()
 
         if "error" in res_data:
-            print("Gemini Error Details:", res_data["error"])
+            print("Groq Error Details:", res_data["error"])
             return jsonify({"status": "error"}), 200
 
-        ai_reply = res_data["candidates"][0]["content"]["parts"][0]["text"]
+        ai_reply = res_data["choices"][0]["message"]["content"]
 
-        # Отправка в Telegram
+        # Отправка ответа в Telegram
         tg_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
         tg_payload = {
             "chat_id": chat_id,
-            "text": ai_reply
+            "text": ai_reply,
         }
-        
+
         if business_connection_id:
             tg_payload["business_connection_id"] = business_connection_id
 
         requests.post(tg_url, json=tg_payload)
-
         return jsonify({"status": "ok"}), 200
 
     except Exception as e:
         print("General Error:", e)
         return jsonify({"status": "error"}), 500
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
