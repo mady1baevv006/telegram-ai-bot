@@ -40,7 +40,7 @@ def webhook():
         return jsonify({"status": "ok"}), 200
 
     # Прямой запрос к Google Gemini API
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={GEMINI_API_KEY}"
     
     payload = {
         "system_instruction": {
